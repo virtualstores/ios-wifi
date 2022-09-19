@@ -14,10 +14,10 @@ public class WiFiController: IWiFiController {
   public private(set) var wifiInfoPublisher: CurrentValueSubject<WiFiInfo?, WiFiError> = .init(nil)
   public private(set) var timeInterval = 0.5
 
-  private var hotspotManager = NEHotspotConfigurationManager.shared
+  public private(set) var hotspotManager = NEHotspotConfigurationManager.shared
   private var fetchingWiFiInfoTimer: Timer?
 
-  init() {
+  public init() {
     startTimer()
   }
 
@@ -35,6 +35,25 @@ public class WiFiController: IWiFiController {
     return arr
   }
 
+  var currentBSSID: String = ""
+  var latestChange = Date()
+  public func fetch(completion: @escaping (WiFiInfo) -> Void) {
+    NEHotspotNetwork.fetchCurrent { (network) in
+      guard
+        let bssid = network?.bssid,
+        let ssid = network?.ssid,
+        let signalStrength = network?.signalStrength
+      else { return }
+
+      if self.currentBSSID != bssid {
+        self.currentBSSID = bssid
+        self.latestChange = Date()
+      } else if Date().timeIntervalSince(self.latestChange) > 5 {
+        completion(WiFiInfo(bssid: bssid, ssid: ssid, signalStrength: signalStrength))
+      }
+    }
+  }
+
   public func set(timeInterval: Double) {
     self.timeInterval = timeInterval
     startTimer()
@@ -44,17 +63,8 @@ public class WiFiController: IWiFiController {
     fetchingWiFiInfoTimer?.invalidate()
     fetchingWiFiInfoTimer = nil
     fetchingWiFiInfoTimer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: true, block: { (_) in
-      NEHotspotNetwork.fetchCurrent { (network) in
-        guard
-          let bssid = network?.bssid,
-          let ssid = network?.ssid,
-          let signalStrength = network?.signalStrength
-        else {
-          self.wifiInfoPublisher.send(completion: .failure(.noData))
-          return
-        }
-
-        self.wifiInfoPublisher.send(WiFiInfo(bssid: bssid, ssid: ssid, signalStrength: signalStrength))
+      self.fetch { (info) in
+        self.wifiInfoPublisher.send(WiFiInfo(bssid: info.bssid, ssid: info.ssid, signalStrength: info.signalStrength))
       }
     })
   }
