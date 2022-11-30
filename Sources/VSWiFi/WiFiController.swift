@@ -15,6 +15,7 @@ public class WiFiController: IWiFiController {
   public private(set) var timeInterval = 0.5
 
   public private(set) var hotspotManager = NEHotspotConfigurationManager.shared
+  private let serialDispatch: DispatchQueue = DispatchQueue(label: "VSWiFiControllerSerial")
   private var fetchingWiFiInfoTimer: Timer?
 
   public init() {
@@ -35,9 +36,33 @@ public class WiFiController: IWiFiController {
     return arr
   }
 
+  public func set(timeInterval: Double) {
+    let interval = timeInterval > 0.5 ? timeInterval : 0.5
+    self.timeInterval = interval
+    startTimer()
+  }
+
+  public func stopTimer() {
+    fetchingWiFiInfoTimer?.invalidate()
+    fetchingWiFiInfoTimer = nil
+  }
+
+  private func startTimer() {
+    serialDispatch.async { [self] in
+      stopTimer()
+      fetchingWiFiInfoTimer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: true, block: { (_) in
+        self.fetch { (info) in
+          DispatchQueue.main.async {
+            self.wifiInfoPublisher.send(WiFiInfo(bssid: info.bssid, ssid: info.ssid, signalStrength: info.signalStrength))
+          }
+        }
+      })
+    }
+  }
+
   var currentBSSID: String = ""
   var latestChange = Date()
-  public func fetch(completion: @escaping (WiFiInfo) -> Void) {
+  private func fetch(completion: @escaping (WiFiInfo) -> Void) {
     NEHotspotNetwork.fetchCurrent { (network) in
       guard
         let bssid = network?.bssid,
@@ -48,24 +73,9 @@ public class WiFiController: IWiFiController {
       if self.currentBSSID != bssid {
         self.currentBSSID = bssid
         self.latestChange = Date()
-      } else if Date().timeIntervalSince(self.latestChange) > 5 {
+      } else if Date().timeIntervalSince(self.latestChange) > 3 {
         completion(WiFiInfo(bssid: bssid, ssid: ssid, signalStrength: signalStrength))
       }
     }
-  }
-
-  public func set(timeInterval: Double) {
-    self.timeInterval = timeInterval
-    startTimer()
-  }
-
-  private func startTimer() {
-    fetchingWiFiInfoTimer?.invalidate()
-    fetchingWiFiInfoTimer = nil
-    fetchingWiFiInfoTimer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: true, block: { (_) in
-      self.fetch { (info) in
-        self.wifiInfoPublisher.send(WiFiInfo(bssid: info.bssid, ssid: info.ssid, signalStrength: info.signalStrength))
-      }
-    })
   }
 }
