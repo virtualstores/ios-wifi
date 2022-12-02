@@ -48,15 +48,15 @@ public class WiFiController: IWiFiController {
   }
 
   private func startTimer() {
-    serialDispatch.async { [self] in
-      stopTimer()
-      fetchingWiFiInfoTimer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: true, block: { (_) in
+    stopTimer()
+    fetchingWiFiInfoTimer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: true) { (_) in
+      self.serialDispatch.async { [self] in
         self.fetch { (info) in
           DispatchQueue.main.async {
             self.wifiInfoPublisher.send(WiFiInfo(bssid: info.bssid, ssid: info.ssid, signalStrength: info.signalStrength))
           }
         }
-      })
+      }
     }
   }
 
