@@ -15,7 +15,7 @@ let package = Package(
             targets: ["VSWiFi"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/virtualstores/ios-foundation.git", .upToNextMajor(from: "0.0.16")),
+        .package(url: "https://github.com/virtualstores/ios-foundation.git", .upToNextMajor(from: "1.0.0")),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
